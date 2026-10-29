@@ -64,6 +64,8 @@ export const openaiCompatAdapter: Adapter = {
           messages: toOpenAIMessages(system, messages),
           tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } })),
           tool_choice: 'auto',
+          // Gemini 2.5 Flash "thinks" by default, which makes each tool round take 6-12s; low keeps chat responsive
+          ...(settings.provider === 'gemini' && /2\.5-flash/.test(settings.model) ? { reasoning_effort: 'low' } : {}),
         }),
       });
     } catch (e: any) {

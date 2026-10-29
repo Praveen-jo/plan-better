@@ -37,9 +37,10 @@ export async function sendUserMessage(text: string, opts: { voice?: boolean } = 
   let currentId: string | null = null;
   let toolCallsThisTurn = 0;
   let failed = false;
+  let nudges = 0;
 
   try {
-    for (let iter = 0; iter < 6; iter++) {
+    for (let iter = 0; iter < 8; iter++) {
       const s = useStore.getState();
       const adapter = s.settings.aiMode !== 'claude' ? mockAdapter : s.settings.provider === 'anthropic' ? claudeAdapter : openaiCompatAdapter;
       const system = buildSystemPrompt(s.settings, s.trip, s.itinerary);
@@ -73,6 +74,7 @@ export async function sendUserMessage(text: string, opts: { voice?: boolean } = 
         }
       }
 
+      const spokenBefore = spokenText;
       if (textAcc) {
         content.push({ type: 'text', text: textAcc });
         spokenText += (spokenText ? ' ' : '') + textAcc.trim();
@@ -81,13 +83,37 @@ export async function sendUserMessage(text: string, opts: { voice?: boolean } = 
       if (content.length) useStore.getState().pushApi({ role: 'assistant', content });
 
       toolCallsThisTurn += toolUses.length;
-      if (!toolUses.length) break;
+      if (!toolUses.length) {
+        // some live models go quiet right after a tool result: nudge them rather than leave the chat silent
+        if (!textAcc.trim() && toolCallsThisTurn > 0 && nudges < 2 && s.settings.aiMode === 'claude') {
+          nudges++;
+          const nudge: ApiBlock = { type: 'text', text: 'You returned an empty reply. If the last tool answered REJECTED, fix the listed problems and call it again. Otherwise reply to the traveler in one or two plain sentences.' };
+          const msgs = useStore.getState().apiMessages;
+          const last = msgs[msgs.length - 1];
+          if (last?.role === 'user' && Array.isArray(last.content)) useStore.setState({ apiMessages: [...msgs.slice(0, -1), { ...last, content: [...last.content, nudge] }] });
+          else useStore.getState().pushApi({ role: 'user', content: [nudge] });
+          continue;
+        }
+        break;
+      }
 
       const results: ApiBlock[] = toolUses.map((t) => {
         const r = executeTool(t.name, t.input, ctx);
         return { type: 'tool_result', tool_use_id: t.id, content: r.content, is_error: r.isError };
       });
       useStore.getState().pushApi({ role: 'user', content: results });
+
+      // a plan the validators rejected is being repaired: hide that attempt's chatter from the traveler
+      const rejected = results.some((r) => r.type === 'tool_result' && r.content.startsWith('REJECTED'));
+      if (rejected && currentId) {
+        const hide = currentId;
+        useStore.setState({ messages: useStore.getState().messages.filter((m) => m.id !== hide) });
+        spokenText = spokenBefore;
+      }
+
+      // chips are UI only: once the model has said its piece and only asked for chips, skip another round trip
+      // (saves a request, which matters on free-tier rate limits)
+      if (!rejected && s.settings.aiMode === 'claude' && textAcc.trim() && toolUses.every((t) => t.name === 'suggest_followups')) break;
       useStore.getState().setStage('Writing the reply');
     }
   } catch (e: any) {
@@ -120,6 +146,19 @@ export async function sendUserMessage(text: string, opts: { voice?: boolean } = 
       role: 'assistant',
       error: true,
       text: 'The model replied without updating your trip, so nothing changed. Small free models can be weak at tool calling. Try again, pick a different model in Settings > AI, or switch to Demo mode.',
+    });
+  }
+
+  // a live model that ended the turn without saying anything: tell the user what happened instead of going silent
+  if (fin.settings.aiMode === 'claude' && !failed && !spokenText) {
+    const planned = useStore.getState().itinerary.length > 0 && toolCallsThisTurn > 0;
+    fin.addMessage({
+      id: uid(),
+      role: 'assistant',
+      error: !planned,
+      text: planned
+        ? 'I have updated your trip. Have a look at the itinerary.'
+        : 'The model did not give an answer this time. Try again, pick a different model in Settings > AI, or switch to Demo mode.',
     });
   }
 
