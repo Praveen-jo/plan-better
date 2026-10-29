@@ -1,6 +1,6 @@
 import type { Adapter, StreamArgs, StreamEvent } from './adapter';
 import type { ApiMessage } from '../store';
-import { presetFor } from './providers';
+import { effectiveKey, presetFor } from './providers';
 
 /** Anthropic-style history -> OpenAI chat messages. */
 export function toOpenAIMessages(system: string, messages: ApiMessage[]): any[] {
@@ -45,12 +45,13 @@ export const openaiCompatAdapter: Adapter = {
     const preset = presetFor(settings.provider);
     const baseUrl = (settings.baseUrl || preset.baseUrl).replace(/\/+$/, '');
     if (!baseUrl) throw new FriendlyError('Enter a base URL in Settings > AI, or switch to Demo mode.');
-    if (preset.needsKey && !settings.apiKey) {
+    const key = effectiveKey(settings.provider, settings.apiKey);
+    if (preset.needsKey && !key) {
       throw new FriendlyError(`No API key yet. Open Settings > AI and paste your key, or switch to Demo mode.`);
     }
 
     const headers: Record<string, string> = { 'content-type': 'application/json' };
-    if (settings.apiKey) headers.authorization = `Bearer ${settings.apiKey}`;
+    if (key) headers.authorization = `Bearer ${key}`;
 
     let res: Response;
     try {

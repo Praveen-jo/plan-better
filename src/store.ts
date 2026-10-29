@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ChatMessage, Day, SavedTrip, Settings, TripParams, UserProfile, Violation } from './types';
 import { markChanged } from './lib/planner';
+import { SHARED_GEMINI_KEY } from './ai/providers';
 
 export type ApiBlock =
   | { type: 'text'; text: string }
@@ -20,7 +21,7 @@ export const defaultSettings: Settings = {
   density: 'comfortable',
   textSize: 'md',
   view: 'timeline',
-  aiMode: 'mock',
+  aiMode: SHARED_GEMINI_KEY ? 'claude' : 'mock', // the deployed site ships a shared key, so it starts live
   provider: 'gemini',
   baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
   keys: {},

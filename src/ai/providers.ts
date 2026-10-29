@@ -20,3 +20,13 @@ export const PROVIDERS: ProviderPreset[] = [
 ];
 
 export const presetFor = (id: Provider) => PROVIDERS.find((p) => p.id === id) ?? PROVIDERS[0];
+
+/**
+ * Optional team key baked in at build time (GitHub secret -> VITE_GEMINI_KEY). It is readable by anyone who opens the
+ * site, so only ever use a free, referrer-restricted key. A key the visitor types in Settings always wins.
+ */
+export const SHARED_GEMINI_KEY: string = import.meta.env.VITE_GEMINI_KEY ?? '';
+
+export function effectiveKey(provider: string, apiKey: string): string {
+  return apiKey || (provider === 'gemini' ? SHARED_GEMINI_KEY : '');
+}

@@ -5,7 +5,7 @@ import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import { toast } from 'sonner';
 import { useStore } from '../store';
 import type { Profile, Provider, Settings } from '../types';
-import { PROVIDERS, presetFor } from '../ai/providers';
+import { PROVIDERS, SHARED_GEMINI_KEY, presetFor } from '../ai/providers';
 import { exportICS, exportJSON, planAsText, printItinerary, DISCLAIMER } from '../lib/export';
 import { listVoices } from '../voice/tts';
 import { Bookmark, Calendar, Chevron, Close, Code, FileDoc, Link } from './Icons';
@@ -200,6 +200,9 @@ export function SettingsDrawer() {
                   </button>
                 </div>
               </label>
+            )}
+            {settings.provider === 'gemini' && SHARED_GEMINI_KEY && !settings.apiKey && (
+              <p className="muted">Using the shared team key, so replies may hit the free rate limit when several people chat at once. Paste your own free key above for your own quota.</p>
             )}
             <label className="field">
               <span>Model</span>
