@@ -47,6 +47,14 @@ export function ChatPanel() {
     if (viaVoice && s.handsFree) voice.start();
   }
 
+  const isPhone = () => window.matchMedia('(max-width: 900px)').matches;
+
+  function startVoiceMode() {
+    setVoiceMode(true);
+    setSettings({ handsFree: true, speakReplies: true });
+    if (!useStore.getState().busy) voice.start();
+  }
+
   function endVoice() {
     voice.abort();
     cancelSpeech();
@@ -98,11 +106,7 @@ export function ChatPanel() {
               disabled={!voice.supported}
               aria-pressed={voiceMode}
               title={voice.supported ? 'Talk to your assistant' : 'Voice input needs Chrome or Edge'}
-              onClick={() => {
-                setVoiceMode(true);
-                setSettings({ handsFree: true, speakReplies: true });
-                if (!busy) voice.start();
-              }}
+              onClick={startVoiceMode}
             >
               <Mic width={16} height={16} /> Voice
             </button>
@@ -261,6 +265,7 @@ export function ChatPanel() {
             aria-label={voice.listening ? 'Stop listening' : 'Start voice input. Hold to talk, or tap to toggle.'}
             title="Tap to talk. Hold for push-to-talk."
             onPointerDown={() => {
+              if (isPhone()) return; // on phones the mic opens the avatar voice screen instead of dictating
               if (!voice.listening && !busy) {
                 pressRef.current = { at: Date.now(), handled: true };
                 voice.start();
@@ -273,6 +278,10 @@ export function ChatPanel() {
               pressRef.current.at = 0;
             }}
             onClick={() => {
+              if (isPhone()) {
+                if (!busy) startVoiceMode();
+                return;
+              }
               if (pressRef.current.handled) {
                 pressRef.current.handled = false;
                 return;
